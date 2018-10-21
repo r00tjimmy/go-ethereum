@@ -18,6 +18,7 @@ type callbackX struct {
 }
 
 
+// include:  callbacksX
 type serviceX struct {
   name            string
   typ             reflect.Type
@@ -26,6 +27,7 @@ type serviceX struct {
 }
 
 
+// include: serviceRegistry
 type ServerX struct {
   services      serviceRegistry
 
@@ -33,6 +35,7 @@ type ServerX struct {
   codecsMu      sync.Mutex
   codecs        *set.Set
 }
+
 
 type serviceRegistry map[string]*serviceX
 type callbacksX map[string]*callbackX
@@ -45,16 +48,29 @@ type RPCServiceX struct {
 
 func main() {
   servicex := &serviceX{name: "xxx"}
+  fmt.Println(servicex) 
+  fmt.Println(servicex.name)
+
+  servicex2 := serviceX{name: "yyy"}
+  fmt.Println(servicex2) 
+  fmt.Println(servicex2.name)
+
   serviceRe := make(map[string]*serviceX)
   serviceRe["testKey"] = servicex
 
-  s := *RPCServiceX{x}
-  modulesX := make(map[string]string)
-  fmt.Println(modulesX)
+  ServerXTmp := &ServerX{ services: serviceRe }
 
-  for name := range s.server.services {
-    fmt.Println(name)
-  }
+  // ServerXTmp is the memory address
+  s := &RPCServiceX{ server: ServerXTmp }
+  fmt.Println(s)
+
+
+  // modulesX := make(map[string]string)
+  // fmt.Println(modulesX)
+
+  // for name := range s.server.services {
+  //   fmt.Println(name)
+  // }
 
 }
 
