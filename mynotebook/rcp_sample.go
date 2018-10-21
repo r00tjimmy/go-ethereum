@@ -65,12 +65,22 @@ func main() {
   fmt.Println(s)
 
 
-  // modulesX := make(map[string]string)
-  // fmt.Println(modulesX)
+  modulesX := make(map[string]string)
+  fmt.Println(modulesX)
 
-  // for name := range s.server.services {
-  //   fmt.Println(name)
-  // }
+  // 搞明白这里了， 如果是range一个map， 那么range的值就是map的key
+  // 所以以太坊原来的RPC代码实际上是用 要调用的方法名来做法 key，然后value 是指向了方法的引用
+  for name := range s.server.services {
+    fmt.Println(name)
+  }
+
+
+  testMap := make(map[string]string)
+  testMap["xx"] = "xx_val"
+  testMap["yy"] = "yy_val"
+  for key := range testMap {
+    fmt.Println(key)
+  }
 
 }
 
