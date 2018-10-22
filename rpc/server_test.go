@@ -23,6 +23,7 @@ import (
 	"reflect"
 	"testing"
 	"time"
+	"fmt"
 )
 
 type Service struct{}
@@ -75,6 +76,10 @@ func (s *Service) Subscription(ctx context.Context) (*Subscription, error) {
 	return nil, nil
 }
 
+/**
+@test cmd:  go test -v server_test.go subscription.go types.go utils.go  server.go errors.go json.go -test.run TestServerRegisterName
+
+ */
 func TestServerRegisterName(t *testing.T) {
 	server := NewServer()
 	service := new(Service)
@@ -99,6 +104,39 @@ func TestServerRegisterName(t *testing.T) {
 	if len(svc.subscriptions) != 1 {
 		t.Errorf("Expected 1 subscription for service 'calc', got %d", len(svc.subscriptions))
 	}
+}
+
+
+
+func TestServerRegisterNameMy(t *testing.T) {
+	server := NewServer()
+	fmt.Println(server)
+	service := new(Service)
+
+	// 注册服务名称
+	if err := server.RegisterName("xxtest", service); err != nil {
+		t.Fatalf("%v", err)
+	}
+
+	//fmt.Println(len(server.run))
+	fmt.Println(server.services)
+	fmt.Println(server.run)
+	fmt.Println(server.codecs)
+
+	if len(server.services) != 2 {
+		t.Fatalf("Expected 2 service entries, got %d", len(server.services))
+	}
+
+	svc, ok := server.services["xxtest"]
+	if !ok {
+		t.Fatalf("Expected service xxtest to be registered")
+	}
+
+	fmt.Println(svc.callbacks)
+	if len(svc.callbacks) != 5 {
+		t.Errorf("Expected 5 callbacks for service 'xxtest', got %d", len(svc.callbacks))
+	}
+
 }
 
 func testServerMethodExecution(t *testing.T, method string) {
