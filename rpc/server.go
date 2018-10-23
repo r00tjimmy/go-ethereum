@@ -54,9 +54,9 @@ func NewServer() *Server {
 	// methods it offers.
 	// todo: 默认的 rpc 服务的 key 是在这里添加的, 默认输出 &{map[rpc:0xc04206eae0] 1 {0 0} 0xc042041120}
 	rpcService := &RPCService{server}
-  fmt.Println("\n----------------- 首先把默认的 rpc 方法注册进去 --------------\n")
+  fmt.Println("\n----------------- 注册默认的 rpc 方法 start --------------\n")
 	server.RegisterName(MetadataApi, rpcService)
-  fmt.Println("\n----------------- 注册默认的 rpc 方法完成 ------------------\n")
+  fmt.Println("\n----------------- 注册默认的 rpc 方法 end ------------------\n")
 
 	return server
 }
@@ -95,7 +95,7 @@ func (s *Server) RegisterName(name string, rcvr interface{}) error {
 		return fmt.Errorf("%s is not exported", reflect.Indirect(rcvrVal).Type().Name())
 	}
 
-  fmt.Println("开始检查 rcvr 可用的方法, suitableCallbackse函数")
+  fmt.Println("\n --------------- 检查 rcvr 可用的方法, suitableCallbackse函数 --------------\n")
 	methods, subscriptions := suitableCallbacks(rcvrVal, svc.typ)
 
 	// already a previous service register under given sname, merge methods/subscriptions
