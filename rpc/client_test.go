@@ -41,9 +41,12 @@ func TestClientRequest(t *testing.T) {
 	defer client.Close()
 
 	var resp Result
+	// 客户端 call 服务器的 RPC 方法
 	if err := client.Call(&resp, "service_echo", "hello", 10, &Args{"world"}); err != nil {
 		t.Fatal(err)
 	}
+
+  // 判断服务端返回的结果是否符合
 	if !reflect.DeepEqual(resp, Result{"hello", 10, &Args{"world"}}) {
 		t.Errorf("incorrect result %#v", resp)
 	}
@@ -97,6 +100,65 @@ func TestClientBatchRequest(t *testing.T) {
 		t.Errorf("batch results mismatch:\ngot %swant %s", spew.Sdump(batch), spew.Sdump(wantResult))
 	}
 }
+
+
+
+func TestClientBatchRequestMy(t *testing.T) {
+  server := newTestServer("service", new(Service))
+  defer server.Stop()
+
+  client := DialInProc(server)
+  defer client.Close()
+
+  batch := []BatchElem{
+    {
+      Method:   "service_echo",
+      Args:     []interface{}{"hello", 10, &Args{"world"}},
+      Result:   new(Result),
+    },
+    {
+      Method:   "service_echo",
+      Args:     []interface{}{"hello2", 11, &Args{"world"}},
+      Result:   new(Result),
+    },
+    {
+      Method:   "no_such_method",
+      Args:     []interface{}{1, 2, 3},
+      Result:   new(int),
+    },
+  }
+
+  if err := client.BatchCall(batch); err != nil {
+    t.Fatal(err)
+  }
+
+  wantResult := []BatchElem{
+    {
+      Method:       "service_echo",
+      Args:         []interface{}{"hello", 10, &Args{"world"}},
+      Result:       &Result{"hello", 10, &Args{"world"}},
+    },
+    {
+      Method:       "service_echo",
+      Args:         []interface{}{"hello2", 11, &Args{"world"}},
+      Result:       &Result{"hello2", 11, &Args{"world"}},
+    },
+    {
+      Method:       "no_such_method",
+      Args:         []interface{}{1, 2, 3},
+      Result:       new(int),
+      Error:        &jsonError{
+        Code:         -32601,
+        Message:      "the method no_such_method_ does not exist",
+      },
+    },
+  }
+  if !reflect.DeepEqual(batch, wantResult) {
+    t.Errorf("batch result mismatch: \n got %s", spew.Sdump(batch))
+  }
+}
+
+
 
 // func TestClientCancelInproc(t *testing.T) { testClientCancel("inproc", t) }
 func TestClientCancelWebsocket(t *testing.T) { testClientCancel("ws", t) }
@@ -189,6 +251,28 @@ func testClientCancel(transport string, t *testing.T) {
 	}
 	wg.Wait()
 }
+
+
+
+func testClientCancelMy(transport string, t *testing.T) {
+  server := newTestServer("service", new(Service))
+  defer server.Stop()
+
+  maxContextCancelTimeout := 300 * time.Millisecond
+  fl := &flakeyListener{
+    maxAcceptDelay:         1 * time.Second,
+    maxKillTimeout:         600 * time.Millisecond,
+  }
+
+  var client *Client
+  switch transport {
+  case "ws", "http":
+    c, hs := httpTestClient(server, transport, fl)
+
+  }
+}
+
+
 
 func TestClientSubscribeInvalidArg(t *testing.T) {
 	server := newTestServer("service", new(Service))
