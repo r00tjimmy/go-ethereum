@@ -32,6 +32,7 @@ import (
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/ethereum/go-ethereum/log"
+  "github.com/golang/protobuf/_conformance/conformance_proto"
 )
 
 func TestClientRequest(t *testing.T) {
@@ -268,7 +269,43 @@ func testClientCancelMy(transport string, t *testing.T) {
   switch transport {
   case "ws", "http":
     c, hs := httpTestClient(server, transport, fl)
+		defer hs.Close()
+		client = c
+	case "ipc":
+		c, l := ipcTestClient(server, fl)
+    defer l.Close()
+    client = c
+  default:
+    panic("unknow transport: " + transport)
+  }
 
+  t.Parallel()
+
+  var (
+    wg          sync.WaitGroup
+    nreqs       = 10
+    ncallers    = 6
+  )
+
+  caller := func(index int) {
+    defer wg.Done()
+
+    for i := 0; i < nreqs; i++ {
+      var (
+        ctx           context.Context
+        cancel        func()
+        timeout       = time.Duration(rand.Int63n(int64(maxContextCancelTimeout)))
+      )
+
+      if index < ncallers/2 {
+        // For half of the callers, create a context without deadline
+        // and cancel it later.
+        ctx, cancel = context.WithCancel(context.Background())
+        time.AfterFunc(timeout, cancel)
+      } else {
+        ctx, cancel = context.WithTimeout(context.Background(), timeout)
+      }
+    }
   }
 }
 
