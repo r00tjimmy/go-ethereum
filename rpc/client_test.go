@@ -33,6 +33,7 @@ import (
 	"github.com/davecgh/go-spew/spew"
 	"github.com/ethereum/go-ethereum/log"
   "github.com/golang/protobuf/_conformance/conformance_proto"
+  "github.com/ethereum/go-ethereum/consensus/ethash"
 )
 
 func TestClientRequest(t *testing.T) {
@@ -305,9 +306,24 @@ func testClientCancelMy(transport string, t *testing.T) {
       } else {
         ctx, cancel = context.WithTimeout(context.Background(), timeout)
       }
+
+      err := client.CallContext(ctx, nil, "service_sleep", 2 * maxContextCancelTimeout)
+      if err != nil {
+        log.Debug(fmt.Sprint("got expected error: ", err))
+      } else {
+        t.Errorf("no error for call with %v wait time", timeout)
+      }
+      cancel()
     }
   }
+
+  wg.Add(ncallers)
+  for i := 0; i < ncallers; i++ {
+    go caller(i)
+  }
+  wg.Wait()
 }
+
 
 
 
@@ -540,6 +556,54 @@ func TestClientHTTP(t *testing.T) {
 	}
 }
 
+
+func TestClientHTTPMy(t *testing.T) {
+  server := newTestServer("service", new(Service))
+  defer server.Stop()
+
+  client, hs := httpTestClient(server, "http", nil)
+  defer hs.Close()
+  defer client.Close()
+
+  // 发起并发请求
+  var (
+    results     =   make([]Result, 100)
+    errc        =   make(chan error)
+    wantResult  =   Result{ "a", 1, new(Args) }
+  )
+
+  for i := range results {
+    i := i
+    go func() {
+      errc <- client.Call(&results[i], "service_echo", wantResult.String, wantResult.Int, wantResult.Args)
+    }()
+  }
+
+  // 等待并发请求完成
+  timeout := time.NewTimer(5 * time.Second)
+  defer timeout.Stop()
+  for i := range results {
+    select {
+    case err := <- errc:
+      if err != nil {
+        t.Fatal(err)
+      }
+
+    case <- timeout.C:
+      t.Fatalf("timeout (got %d/%d) results", i+1, len(results))
+    }
+  }
+
+  // 检查请求的结果
+  for i := range results {
+    if !reflect.DeepEqual(results[i], wantResult) {
+      t.Errorf("result %d mismatch: got %#v, want %#v", i, results[i], wantResult)
+    }
+  }
+}
+
+
+
 func TestClientReconnect(t *testing.T) {
 	startServer := func(addr string) (*Server, net.Listener) {
 		srv := newTestServer("service", new(Service))
@@ -605,6 +669,74 @@ func TestClientReconnect(t *testing.T) {
 		t.Errorf("expected one error after disconnect, got %d", errcount)
 	}
 }
+
+
+func TestClientReconnectMy(t *testing.T) {
+  startServer := func(addr string) (*Server, net.Listener) {
+    srv := newTestServer("service", new(Service))
+    l, err := net.Listen("tcp", addr)
+    if err != nil {
+      t.Fatal(err)
+    }
+    go http.Serve(l, srv.WebsocketHandler([]string{"*"}))
+    return srv, l
+  }
+
+  ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+  defer cancel()
+
+  // Start a server and corresponding client.
+  s1, l1 := startServer("127.0.0.1:0")
+  client, err := DialContext(ctx, "ws://"+l1.Addr().String())
+  if err != nil {
+    t.Fatal("can't dial", err)
+  }
+
+  // Perform a call. This should work because the server is up.
+  var resp Result
+  if err := client.CallContext(ctx, &resp, "service_echo", "", 1, nil); err != nil {
+    t.Fatal(err)
+  }
+
+  // Shut down the server and try calling again. It shouldn't work.
+  l1.Close()
+  s1.Stop()
+  if err := client.CallContext(ctx, &resp, "service_echo", "", 2, nil); err == nil {
+    t.Error("successful call while the server is down")
+    t.Logf("resp: %#v", resp)
+  }
+
+  // Allow for some cool down time so we can listen on the same address again.
+  time.Sleep(2 * time.Second)
+
+  // Start it up again and call again. The connection should be reestablished.
+  // We spawn multiple calls here to check whether this hangs somehow.
+  s2, l2 := startServer(l1.Addr().String())
+  defer l2.Close()
+  defer s2.Stop()
+
+  start := make(chan struct{})
+  errors := make(chan error, 20)
+  for i := 0; i < cap(errors); i++ {
+    go func() {
+      <-start
+      var resp Result
+      errors <- client.CallContext(ctx, &resp, "service_echo", "", 3, nil)
+    }()
+  }
+  close(start)
+  errcount := 0
+  for i := 0; i < cap(errors); i++ {
+    if err = <-errors; err != nil {
+      errcount++
+    }
+  }
+  t.Log("err:", err)
+  if errcount > 1 {
+    t.Errorf("expected one error after disconnect, got %d", errcount)
+  }
+}
+
 
 func newTestServer(serviceName string, service interface{}) *Server {
 	server := NewServer()
